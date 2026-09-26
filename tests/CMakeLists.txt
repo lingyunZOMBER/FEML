@@ -1,5 +1,6 @@
 add_executable(feml_tests
-    test_smoke.cpp)
+    test_smoke.cpp
+    test_integration_rule.cpp)
 
 target_link_libraries(feml_tests
     PRIVATE
