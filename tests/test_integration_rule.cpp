@@ -28,10 +28,6 @@ feml::Real exactMoment(int power) {
 
 } // namespace
 
-// ---------------------------------------------------------------------------
-//  不变量：对任何 n 都成立，不用查表就能验
-// ---------------------------------------------------------------------------
-
 TEST_CASE("weights sum to the interval length", "[integration]") {
 	for (int n = 1; n <= 4; ++n) {
 		INFO("n = " << n);
@@ -66,9 +62,7 @@ TEST_CASE("order matches the number of points", "[integration]") {
 	}
 }
 
-// ---------------------------------------------------------------------------
-//  核心性质：n 点高斯积分对 2n-1 次多项式精确
-// ---------------------------------------------------------------------------
+//  n 点高斯积分对 2n-1 次多项式精确
 
 TEST_CASE("n-point rule integrates all polynomials up to degree 2n-1 exactly",
           "[integration]") {
@@ -92,9 +86,7 @@ TEST_CASE("n-point rule fails to integrate degree 2n exactly", "[integration]") 
 	}
 }
 
-// ---------------------------------------------------------------------------
 //  错误处理
-// ---------------------------------------------------------------------------
 
 TEST_CASE("invalid order throws InputError", "[integration]") {
 	REQUIRE_THROWS_AS(feml::GaussRule1D::make(0), feml::InputError);

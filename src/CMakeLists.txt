@@ -1,5 +1,8 @@
 add_library(feml STATIC
-    core/version.cpp "element/integration_rule.cpp")
+    core/version.cpp
+    element/integration_rule.cpp
+    element/registry.cpp)
+
 add_library(FEML::feml ALIAS feml)
 
 target_include_directories(feml
