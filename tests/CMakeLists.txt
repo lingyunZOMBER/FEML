@@ -1,7 +1,8 @@
 add_executable(feml_tests
     test_smoke.cpp
-    test_integration_rule.cpp 
-    test_element_interface.cpp)
+    test_integration_rule.cpp
+    test_element_interface.cpp
+    test_beam2.cpp)
 
 target_link_libraries(feml_tests
     PRIVATE

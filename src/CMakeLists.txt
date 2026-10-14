@@ -1,7 +1,9 @@
 add_library(feml STATIC
     core/version.cpp
     element/integration_rule.cpp
-    element/registry.cpp)
+    element/registry.cpp
+    element/beam2_timoshenko.cpp
+    element/register_builtin.cpp)
 
 add_library(FEML::feml ALIAS feml)
 
