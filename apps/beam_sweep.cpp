@@ -2,15 +2,15 @@
 ///  beam_sweep —— Timoshenko 梁单元批量扫描驱动
 ///
 ///  【程序目标】
-///  对一组参数组合逐一求解悬臂梁算例，把数值解与两组解析解写入 CSV 文件。
+///  对一组参数组合逐一求解悬臂梁算例，把端部挠度与转角写入 CSV 文件。
 ///
 ///  【用法】
 ///      beam_sweep [输出文件.csv]
 ///      省略参数时输出到 beam_sweep.csv
 ///
-///  【扫描范围】共 648 个算例
+///  【扫描范围】共 864 个算例
 ///      单元类型    BEAM2 / BEAM3
-///      单元数      1, 2, 4, 8, 16, 32
+///      单元数      1, 2, 4, 8, 16, 32, 64, 128
 ///      积分方案    FULL / REDUCED / SELECTIVE
 ///      载荷类型    LOAD（端部集中力）/ MOMENT（端部弯矩）
 ///      细长比 h/L  0.5, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.001
@@ -21,12 +21,8 @@
 ///      scheme                 积分方案
 ///      loadType               载荷类型
 ///      hOverL                 细长比 h/L
-///      tipW                   数值解：端部挠度
-///      tipTheta               数值解：端部转角
-///      w_timoshenko           解析解：端部挠度（含剪切变形）
-///      theta_timoshenko       解析解：端部转角（含剪切变形）
-///      w_eulerBernoulli       解析解：端部挠度（不含剪切变形）
-///      theta_eulerBernoulli   解析解：端部转角（不含剪切变形）
+///      tipW                   端部挠度（数值解）
+///      tipTheta               端部转角（数值解）
 ///
 ///  【单位制】SI：长度 m，力 N，弹性模量 Pa
 ///
@@ -154,7 +150,7 @@ TipValues solveCantilever(const feml::Mesh& mesh,
 	problem.dofs     = &dofs;
 	problem.scheme   = scheme;
 
-	// 载荷向量：只作用在最后一个节点
+	// 载荷向量：
 	const int last = mesh.nodeCount() - 1;
 	problem.nodalLoads = Eigen::VectorXd::Zero(2 * mesh.nodeCount());
 	problem.nodalLoads(last * 2 + 0) = tipLoad;
@@ -169,52 +165,6 @@ TipValues solveCantilever(const feml::Mesh& mesh,
 }
 
 // ---------------------------------------------------------------------------
-//  解析解
-// ---------------------------------------------------------------------------
-
-/// 端部节点的解析参考值
-struct Analytical {
-	double wTimo     = 0.0;   ///< 挠度（含剪切）
-	double thetaTimo = 0.0;   ///< 转角（含剪切）
-	double wEB       = 0.0;   ///< 挠度（不含剪切）
-	double thetaEB   = 0.0;   ///< 转角（不含剪切）
-};
-
-/// 计算悬臂梁端部响应的两组解析解。
-///
-/// 端部集中力 P：
-///     w = PL³/(3EI) + PL/(k_s·GA)      θ = PL²/(2EI)      含剪切
-///     w = PL³/(3EI)                     θ = PL²/(2EI)      不含剪切
-///
-/// 端部弯矩 M（纯弯，剪切应变恒为零，两组解相同）：
-///     w = ML²/(2EI)                     θ = ML/(EI)
-Analytical analyticalSolutions(double E, double nu, double area, double inertia,
-                               double L, double tipLoad, double tipMoment) {
-	const double EI  = E * inertia;
-	const double G   = E / (2.0 * (1.0 + nu));
-	const double kGA = kShear * G * area;
-
-	Analytical a;
-
-	if (tipLoad != 0.0) {
-		// 端部集中力
-		a.wTimo     = tipLoad * L * L * L / (3.0 * EI) + tipLoad * L / kGA;
-		a.thetaTimo = tipLoad * L * L / (2.0 * EI);
-
-		a.wEB       = tipLoad * L * L * L / (3.0 * EI);
-		a.thetaEB   = tipLoad * L * L / (2.0 * EI);
-	} else {
-		// 端部弯矩
-		a.wTimo     = tipMoment * L * L / (2.0 * EI);
-		a.thetaTimo = tipMoment * L / EI;
-
-		a.wEB       = a.wTimo;
-		a.thetaEB   = a.thetaTimo;
-	}
-
-	return a;
-}
-
 /// 积分方案 → CSV 中使用的字符串
 const char* schemeName(feml::IntegrationScheme scheme) {
 	switch (scheme) {
@@ -249,14 +199,11 @@ int main(int argc, char** argv) {
 		out << std::scientific << std::setprecision(15);
 
 		// 表头
-		out << "elementType,elementCount,scheme,loadType,hOverL,"
-		       "tipW,tipTheta,"
-		       "w_timoshenko,theta_timoshenko,"
-		       "w_eulerBernoulli,theta_eulerBernoulli\n";
+		out << "elementType,elementCount,scheme,loadType,hOverL,tipW,tipTheta\n";
 
 		// 扫描参数表
 		const char* const elementTypes[] = { "BEAM2", "BEAM3" };
-		const int elementCounts[]        = { 1, 2, 4, 8, 16, 32 };
+		const int elementCounts[]        = { 1, 2, 4, 8, 16, 32, 64, 128};
 		const feml::IntegrationScheme schemes[] = {
 			feml::IntegrationScheme::Full,
 			feml::IntegrationScheme::Reduced,
@@ -308,10 +255,6 @@ int main(int argc, char** argv) {
 								const TipValues tip = solveCantilever(
 									mesh, material, section, scheme, tipLoad, tipMoment);
 
-								// 解析解
-								const Analytical an = analyticalSolutions(
-									kE, kNu, area, inertia, kL, tipLoad, tipMoment);
-
 								// 写一行
 								out << type << ','
 								    << elementCount << ','
@@ -319,11 +262,7 @@ int main(int argc, char** argv) {
 								    << loadType << ','
 								    << hOverL << ','
 								    << tip.w << ','
-								    << tip.theta << ','
-								    << an.wTimo << ','
-								    << an.thetaTimo << ','
-								    << an.wEB << ','
-								    << an.thetaEB << '\n';
+								    << tip.theta << '\n';
 
 								++written;
 							}
@@ -338,7 +277,7 @@ int main(int argc, char** argv) {
 								    << schemeName(scheme) << ','
 								    << loadType << ','
 								    << hOverL << ','
-								    << "nan,nan,nan,nan,nan,nan\n";
+								    << "nan,nan\n";
 
 								++failed;
 							}
