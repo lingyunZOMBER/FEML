@@ -39,16 +39,13 @@ int main() {
 		std::cout << "Eigen " << EIGEN_WORLD_VERSION << "."
 		          << EIGEN_MAJOR_VERSION << "." << EIGEN_MINOR_VERSION << "\n";
 
-		// 【必须显式调用】静态库的链接器只会挑选"被引用到"的目标文件，
-		// 靠静态初始化的自动注册可能被整个丢掉。详见 register_builtin.hpp。
 		feml::registerBuiltinElements();
 
 		printRegisteredElements();
 
 		return 0;
 	}
-	// 只捕一个基类就能兜住所有可预期的错误——这就是异常分层设计的目的。
-	// 剩下没被捕获的（std::bad_alloc 等）才让程序真正崩溃。
+
 	catch (const feml::FemlError& e) {
 		std::cerr << e.what() << "\n";
 		return 1;

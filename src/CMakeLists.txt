@@ -1,9 +1,14 @@
 add_library(feml STATIC
     core/version.cpp
+    linalg/eigen_solver.cpp
+    model/dof_manager.cpp
     element/integration_rule.cpp
     element/registry.cpp
     element/beam2_timoshenko.cpp
-    element/register_builtin.cpp)
+    element/beam3_timoshenko.cpp
+    element/register_builtin.cpp
+    analysis/assembler.cpp
+    analysis/static_analysis.cpp)
 
 add_library(FEML::feml ALIAS feml)
 
