@@ -141,4 +141,55 @@ Eigen::MatrixXd assembleStiffness(const Mesh& mesh,
 	return K;
 }
 
+Eigen::VectorXd assembleLoadVector(const Mesh& mesh,
+                                   const Material& material,
+                                   const Section& section,
+                                   IntegrationScheme scheme,
+                                   Real transverseLoad) {
+	validateMesh(mesh);
+
+	const int dofPerNode = determineDofPerNode(mesh);
+	const int total = mesh.nodeCount() * dofPerNode;
+
+	Eigen::VectorXd F = Eigen::VectorXd::Zero(total);
+
+	for (int e = 0; e < mesh.elementCount(); ++e) {
+		const std::string& type = mesh.element_type[static_cast<std::size_t>(e)];
+		const std::vector<NodeId>& nodes = mesh.element_nodes[static_cast<std::size_t>(e)];
+
+		const std::unique_ptr<Element> element = ElementRegistry::create(type);
+
+		if (static_cast<int>(nodes.size()) != element->nodeCount()) {
+			throw InputError("单元 " + std::to_string(e) + "（" + type + "）需要 "
+			                 + std::to_string(element->nodeCount()) + " 个节点，实际给了 "
+			                 + std::to_string(nodes.size()) + " 个");
+		}
+
+		ElementContext ctx;
+		ctx.node_coords     = gatherNodeCoords(mesh, nodes, mesh.spatialDim(), e);
+		ctx.material        = &material;
+		ctx.section         = &section;
+		ctx.scheme          = scheme;
+		ctx.transverse_load = transverseLoad;
+
+		Eigen::VectorXd Fe;
+		element->loadVector(ctx, Fe);
+
+		const int n = element->totalDof();
+		if (Fe.size() != n) {
+			throw SolverError("单元 " + std::to_string(e) + "（" + type
+			                  + "）返回的载荷向量长度 " + std::to_string(Fe.size())
+			                  + "，与声明的 " + std::to_string(n) + " 不符");
+		}
+
+		// 散列进全局载荷向量
+		for (int a = 0; a < n; ++a) {
+			const int ia = globalDof(nodes, dofPerNode, a / dofPerNode, a % dofPerNode);
+			F(ia) += Fe(a);
+		}
+	}
+
+	return F;
+}
+
 } // namespace feml

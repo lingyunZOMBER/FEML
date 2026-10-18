@@ -50,9 +50,16 @@ StaticResult solveStatic(const StaticProblem& problem, LinearSolver& solver) {
 
 	requireZeroPrescribed(dofs);
 
-	// ---- 1. 组装总刚 ----
+	// ---- 1. 组装总刚与载荷 ----
 	const Eigen::MatrixXd K = assembleStiffness(mesh, *problem.material,
 	                                            *problem.section, problem.scheme);
+
+	// 分布载荷（板单元的横向均布载荷）组装成一致节点载荷，再与显式节点载荷叠加
+	const Eigen::VectorXd distributed = assembleLoadVector(
+		mesh, *problem.material, *problem.section, problem.scheme,
+		problem.transverseLoad);
+
+	const Eigen::VectorXd totalLoad = problem.nodalLoads + distributed;
 
 	// ---- 2. 建立「方程号 → 全局自由度下标」的映射 ----
 	const int neq = dofs.equationCount();
@@ -71,7 +78,7 @@ StaticResult solveStatic(const StaticProblem& problem, LinearSolver& solver) {
 
 	for (int a = 0; a < neq; ++a) {
 		const int ia = equationToGlobal[static_cast<std::size_t>(a)];
-		Ff(a) = problem.nodalLoads(ia);
+		Ff(a) = totalLoad(ia);
 		for (int b = 0; b < neq; ++b) {
 			const int ib = equationToGlobal[static_cast<std::size_t>(b)];
 			Kff(a, b) = K(ia, ib);
@@ -107,7 +114,7 @@ StaticResult solveStatic(const StaticProblem& problem, LinearSolver& solver) {
 	}
 
 	// ---- 6. 支反力 R = K·u − F ----
-	result.reaction = K * result.displacement - problem.nodalLoads;
+	result.reaction = K * result.displacement - totalLoad;
 
 	return result;
 }

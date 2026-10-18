@@ -26,6 +26,10 @@ namespace feml {
 
 		IntegrationScheme scheme = IntegrationScheme::Full;
 
+		/// 作用在单元上的横向均布载荷，单位 N/m²。
+		/// 板单元在 loadVector() 中使用；梁单元忽略此字段。
+		Real transverse_load = 0.0;
+
 		/// 单元内的节点位移（仅在后处理 recover() 时需要）
 		Eigen::VectorXd element_dofs;
 	};

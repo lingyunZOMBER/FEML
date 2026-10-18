@@ -24,8 +24,10 @@ struct StaticProblem {
 	IntegrationScheme scheme = IntegrationScheme::Full;
 
 	/// 节点载荷，长度 = 节点数 × 每节点自由度数，按 (节点, 分量) 展平。
-	/// 被约束的分量会被忽略（那里由指定位移接管）。
 	Eigen::VectorXd nodalLoads;
+
+	/// 横向均布载荷 [N/m²]，由各单元的一致节点载荷向量组装。
+	Real transverseLoad = 0.0;
 };
 
 /// 线性静力分析的结果。
@@ -43,13 +45,6 @@ struct StaticResult {
 };
 
 /// 线性静力分析：组装 → 施加约束 → 求解 → 算支反力。
-///
-/// 【约束施加方式：消元法】
-/// 已知指定位移的自由度直接从方程组里剔除，只解剩下的自由自由度。
-/// 对"固支"这类零位移约束，这等价于删掉对应的行列。
-///
-/// 现在只支持【零】指定位移。
-/// 
 /// @throws InputError  输入数据不自洽（指针为空、载荷向量长度不符、有非零指定位移）
 /// @throws SolverError 线性方程组求解失败（通常意味着结构欠约束）
 StaticResult solveStatic(const StaticProblem& problem, LinearSolver& solver);

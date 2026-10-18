@@ -2,6 +2,7 @@
 
 #include "feml/element/beam2_timoshenko.hpp"
 #include "feml/element/beam3_timoshenko.hpp"
+#include "feml/element/plate_mindlin.hpp"
 #include "feml/element/registry.hpp"
 
 #include <memory>
@@ -15,12 +16,22 @@ namespace feml {
 /// 名字必须与该单元 name() 的返回值一致
 void registerBuiltinElements() {
 	static const bool registered = [] {
+		// 一维梁单元
 		ElementRegistry::add("BEAM2", [] {
 			return std::make_unique<Beam2Timoshenko>();
 		});
 
 		ElementRegistry::add("BEAM3", [] {
 			return std::make_unique<Beam3Timoshenko>();
+		});
+
+		// 二维板单元
+		ElementRegistry::add("PLATE9", [] {
+			return std::make_unique<Plate9Lagrange>();
+		});
+
+		ElementRegistry::add("PLATE8", [] {
+			return std::make_unique<Plate8Serendipity>();
 		});
 
 		return true;

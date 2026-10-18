@@ -55,9 +55,34 @@ namespace feml {
 		return rule;
 	}
 
+	// 二维高斯积分：两个一维规则的张量积
+	GaussRule2D GaussRule2D::make(int nx, int ny) {
+		if (nx < 1 || nx > 4 || ny < 1 || ny > 4) {
+			throw InputError("二维高斯积分点数 " + std::to_string(nx) + "x"
+			                 + std::to_string(ny) + " 超出支持范围 [1,4]x[1,4]");
+		}
+
+		const GaussRule1D rx = GaussRule1D::make(nx);
+		const GaussRule1D ry = GaussRule1D::make(ny);
+
+		GaussRule2D rule;
+		rule.points_.reserve(static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny));
+
+		for (const GaussPoint1D& px : rx.points()) {
+			for (const GaussPoint1D& py : ry.points()) {
+				GaussPoint2D gp;
+				gp.xi     = px.xi;
+				gp.eta    = py.xi;
+				gp.weight = px.weight * py.weight;
+				rule.points_.push_back(gp);
+			}
+		}
+
+		return rule;
+	}
+
 	//积分方案关键字
-	IntegrationScheme parseIntegrationScheme(std::string_view text) {
-		const std::string key = toUpper(text);
+	IntegrationScheme parseIntegrationScheme(std::string_view text) {		const std::string key = toUpper(text);
 
 		if (key == "FULL" || key == "EXACT") {
 			return IntegrationScheme::Full;

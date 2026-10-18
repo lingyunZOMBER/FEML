@@ -5,6 +5,7 @@ add_executable(feml_tests
     test_element_interface.cpp
     test_beam2.cpp
     test_beam3.cpp
+    test_plate.cpp
     test_assembly.cpp)
 
 target_link_libraries(feml_tests

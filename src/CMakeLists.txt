@@ -6,6 +6,8 @@ add_library(feml STATIC
     element/registry.cpp
     element/beam2_timoshenko.cpp
     element/beam3_timoshenko.cpp
+    element/plate_shape.cpp
+    element/plate_mindlin.cpp
     element/register_builtin.cpp
     analysis/assembler.cpp
     analysis/static_analysis.cpp)
