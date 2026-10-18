@@ -52,10 +52,7 @@ out\build\x64-Debug\bin\beam_sweep.exe examples\beam_sweep\beam_sweep.csv
 plot_sweep
 ```
 
-生成三张图和一份文字汇总表。
-
-> MATLAB 使用清华的网络许可证（`matlab.cic.tsinghua.edu.cn:27000`），
-> 需要接入校园网或 VPN。
+生成五张图和一份文字汇总表。
 
 ## 三、CSV 列说明
 
