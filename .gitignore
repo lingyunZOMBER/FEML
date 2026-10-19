@@ -78,3 +78,5 @@ compile_commands.json
 # 算例的输出数据与图（可由程序重新生成；作业提交时另行打包，不入库）
 examples/*/*.csv
 examples/*/*.png
+# 课程作业原题（不随代码入库）
+*.doc
