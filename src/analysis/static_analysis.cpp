@@ -66,22 +66,22 @@ StaticResult solveStatic(const StaticProblem& problem, LinearSolver& solver) {
 	const int ndof = dofs.dofPerNode();
 
 	std::vector<int> equationToGlobal(static_cast<std::size_t>(neq));
-	for (int e = 0; e < neq; ++e) {
+	for (std::size_t e = 0; e < static_cast<std::size_t>(neq); ++e) {
 		const int node = static_cast<int>(dofs.nodeOf(static_cast<Index>(e)));
 		const int comp = static_cast<int>(dofs.componentOf(static_cast<Index>(e)));
-		equationToGlobal[static_cast<std::size_t>(e)] = node * ndof + comp;
+		equationToGlobal[e] = node * ndof + comp;
 	}
 
 	// ---- 3. 添加约束：消元法
 	Eigen::MatrixXd Kff(neq, neq);
 	Eigen::VectorXd Ff(neq);
 
-	for (int a = 0; a < neq; ++a) {
-		const int ia = equationToGlobal[static_cast<std::size_t>(a)];
-		Ff(a) = totalLoad(ia);
-		for (int b = 0; b < neq; ++b) {
-			const int ib = equationToGlobal[static_cast<std::size_t>(b)];
-			Kff(a, b) = K(ia, ib);
+	for (std::size_t a = 0; a < static_cast<std::size_t>(neq); ++a) {
+		const int ia = equationToGlobal[a];
+		Ff(static_cast<Eigen::Index>(a)) = totalLoad(ia);
+		for (std::size_t b = 0; b < static_cast<std::size_t>(neq); ++b) {
+			const int ib = equationToGlobal[b];
+			Kff(static_cast<Eigen::Index>(a), static_cast<Eigen::Index>(b)) = K(ia, ib);
 		}
 	}
 
@@ -109,8 +109,8 @@ StaticResult solveStatic(const StaticProblem& problem, LinearSolver& solver) {
 	}
 
 	// 再填自由自由度
-	for (int e = 0; e < neq; ++e) {
-		result.displacement(equationToGlobal[static_cast<std::size_t>(e)]) = uf(e);
+	for (std::size_t e = 0; e < static_cast<std::size_t>(neq); ++e) {
+		result.displacement(equationToGlobal[e]) = uf(static_cast<Eigen::Index>(e));
 	}
 
 	// ---- 6. 支反力 R = K·u − F ----

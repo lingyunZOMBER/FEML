@@ -20,9 +20,6 @@ using ShapeFn = PlateShapeValues (*)(Real, Real);
 // ---------------------------------------------------------------------------
 
 /// 弯曲项需要的高斯点数（每个方向）
-///
-/// 弯曲项的 BᵀDB 在每个方向上二次，2 点即精确；
-/// Full 取 3 点是为了统一采用能精确积分剪切项的点数。
 int bendingOrder(IntegrationScheme scheme) {
 	switch (scheme) {
 	case IntegrationScheme::Full:             return 3;
@@ -33,9 +30,6 @@ int bendingOrder(IntegrationScheme scheme) {
 }
 
 /// 剪切项需要的高斯点数（每个方向）
-///
-/// 剪切项含形函数本身（二次），γᵀDγ 在每个方向上四次，需要 3 点才精确。
-/// 减缩 / 选择减缩取 2 点，以避免剪切锁死。
 int shearOrder(IntegrationScheme scheme) {
 	switch (scheme) {
 	case IntegrationScheme::Full:             return 3;
@@ -54,23 +48,19 @@ struct Geometry {
 	double dxdXi = 0.0, dydXi = 0.0;
 	double dxdEta = 0.0, dydEta = 0.0;
 	double detJ = 0.0;
-	std::vector<double> dNdx;   ///< ∂N/∂x
-	std::vector<double> dNdy;   ///< ∂N/∂y
+	std::vector<double> dNdx;   
+	std::vector<double> dNdy;   
 };
 
 /// 计算 Jacobian 与形函数的物理偏导
-///
-///   [∂x/∂ξ  ∂y/∂ξ]        [∂N/∂x]        [∂N/∂ξ]
-///   [∂x/∂η  ∂y/∂η]  与    [∂N/∂y]   由    [∂N/∂η] 通过 J⁻¹ 联系
 Geometry computeGeometry(const PlateShapeValues& s, const Eigen::MatrixXd& coords) {
 	const int n = s.nodeCount;
 
 	Geometry g;
 
-	for (int i = 0; i < n; ++i) {
-		const std::size_t k = static_cast<std::size_t>(i);
-		const double x = coords(i, 0);
-		const double y = coords(i, 1);
+	for (std::size_t k = 0; k < static_cast<std::size_t>(n); ++k) {
+		const double x = coords(static_cast<Eigen::Index>(k), 0);
+		const double y = coords(static_cast<Eigen::Index>(k), 1);
 
 		g.dxdXi  += s.dNdXi[k]  * x;
 		g.dydXi  += s.dNdXi[k]  * y;
@@ -89,9 +79,7 @@ Geometry computeGeometry(const PlateShapeValues& s, const Eigen::MatrixXd& coord
 
 	const double invDet = 1.0 / g.detJ;
 
-	for (int i = 0; i < n; ++i) {
-		const std::size_t k = static_cast<std::size_t>(i);
-
+	for (std::size_t k = 0; k < static_cast<std::size_t>(n); ++k) {
 		g.dNdx[k] = ( g.dydEta * s.dNdXi[k] - g.dydXi  * s.dNdEta[k]) * invDet;
 		g.dNdy[k] = (-g.dxdEta * s.dNdXi[k] + g.dxdXi  * s.dNdEta[k]) * invDet;
 	}
@@ -104,16 +92,11 @@ Geometry computeGeometry(const PlateShapeValues& s, const Eigen::MatrixXd& coord
 // ---------------------------------------------------------------------------
 
 /// 弯曲应变矩阵 B_b（3 × 3n）
-///
-///   κx  = ∂θx/∂x
-///   κy  = ∂θy/∂y
-///   κxy = ∂θx/∂y + ∂θy/∂x
 Eigen::MatrixXd bendingB(const Geometry& g, int n) {
 	Eigen::MatrixXd B = Eigen::MatrixXd::Zero(3, 3 * n);
 
-	for (int i = 0; i < n; ++i) {
-		const std::size_t k = static_cast<std::size_t>(i);
-		const int col = 3 * i;
+	for (std::size_t k = 0; k < static_cast<std::size_t>(n); ++k) {
+		const Eigen::Index col = 3 * static_cast<Eigen::Index>(k);
 
 		B(0, col + 1) = g.dNdx[k];
 		B(1, col + 2) = g.dNdy[k];
@@ -125,15 +108,11 @@ Eigen::MatrixXd bendingB(const Geometry& g, int n) {
 }
 
 /// 剪切应变矩阵 B_s（2 × 3n）
-///
-///   γxz = ∂w/∂x − θx
-///   γyz = ∂w/∂y − θy
 Eigen::MatrixXd shearB(const Geometry& g, const PlateShapeValues& s, int n) {
 	Eigen::MatrixXd B = Eigen::MatrixXd::Zero(2, 3 * n);
 
-	for (int i = 0; i < n; ++i) {
-		const std::size_t k = static_cast<std::size_t>(i);
-		const int col = 3 * i;
+	for (std::size_t k = 0; k < static_cast<std::size_t>(n); ++k) {
+		const Eigen::Index col = 3 * static_cast<Eigen::Index>(k);
 
 		B(0, col + 0) = g.dNdx[k];
 		B(0, col + 1) = -s.N[k];
@@ -216,8 +195,6 @@ void computePlateStiffness(ShapeFn shapeFn, int n,
 }
 
 /// 均布横向载荷 q 的一致节点载荷向量
-///
-///   f_i = ∫ N_i · q · |J| dξ dη     （只作用在 w 自由度上）
 void computePlateLoad(ShapeFn shapeFn, int n,
                       const ElementContext& ctx, Eigen::VectorXd& Fe) {
 	const int ndof = 3 * n;
@@ -236,8 +213,8 @@ void computePlateLoad(ShapeFn shapeFn, int n,
 
 		const double factor = gp.weight * std::abs(g.detJ) * ctx.transverse_load;
 
-		for (int i = 0; i < n; ++i) {
-			Fe(3 * i) += s.N[static_cast<std::size_t>(i)] * factor;
+		for (std::size_t k = 0; k < static_cast<std::size_t>(n); ++k) {
+			Fe(3 * static_cast<Eigen::Index>(k)) += s.N[k] * factor;
 		}
 	}
 }

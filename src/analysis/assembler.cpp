@@ -16,8 +16,8 @@ namespace {
 
 /// 单元的第 k 个节点、第 c 个分量 → 全局自由度下标
 int globalDof(const std::vector<NodeId>& elementNodes, int dofPerNode,
-              int k, int c) {
-	return static_cast<int>(elementNodes[static_cast<std::size_t>(k)]) * dofPerNode + c;
+              std::size_t k, int c) {
+	return static_cast<int>(elementNodes[k]) * dofPerNode + c;
 }
 
 /// 数据自洽性检查。全部在循环之前做完，避免算到一半才发现问题。
@@ -42,9 +42,9 @@ void validateMesh(const Mesh& mesh) {
 int determineDofPerNode(const Mesh& mesh) {
 	int dofPerNode = -1;
 
-	for (int e = 0; e < mesh.elementCount(); ++e) {
+	for (std::size_t e = 0; e < mesh.element_type.size(); ++e) {
 		const std::unique_ptr<Element> element =
-			ElementRegistry::create(mesh.element_type[static_cast<std::size_t>(e)]);
+			ElementRegistry::create(mesh.element_type[e]);
 
 		const int d = element->dofPerNode();
 		if (dofPerNode < 0) {
@@ -90,9 +90,9 @@ Eigen::MatrixXd assembleStiffness(const Mesh& mesh,
 	const int total = mesh.nodeCount() * dofPerNode;
 	Eigen::MatrixXd K = Eigen::MatrixXd::Zero(total, total);
 
-	for (int e = 0; e < mesh.elementCount(); ++e) {
-		const std::string& type = mesh.element_type[static_cast<std::size_t>(e)];
-		const std::vector<NodeId>& nodes = mesh.element_nodes[static_cast<std::size_t>(e)];
+	for (std::size_t e = 0; e < mesh.element_type.size(); ++e) {
+		const std::string& type = mesh.element_type[e];
+		const std::vector<NodeId>& nodes = mesh.element_nodes[e];
 
 		const std::unique_ptr<Element> element = ElementRegistry::create(type);
 
@@ -111,7 +111,8 @@ Eigen::MatrixXd assembleStiffness(const Mesh& mesh,
 
 		// ---- 单元上下文 ----
 		ElementContext ctx;
-		ctx.node_coords = gatherNodeCoords(mesh, nodes, mesh.spatialDim(), e);
+		ctx.node_coords = gatherNodeCoords(mesh, nodes, mesh.spatialDim(),
+		                                   static_cast<int>(e));
 		ctx.material    = &material;
 		ctx.section     = &section;
 		ctx.scheme      = scheme;
@@ -129,11 +130,16 @@ Eigen::MatrixXd assembleStiffness(const Mesh& mesh,
 		}
 
 		// ---- 散列进总刚 ----
-		for (int a = 0; a < n; ++a) {
-			const int ia = globalDof(nodes, dofPerNode, a / dofPerNode, a % dofPerNode);
-			for (int b = 0; b < n; ++b) {
-				const int ib = globalDof(nodes, dofPerNode, b / dofPerNode, b % dofPerNode);
-				K(ia, ib) += Ke(a, b);
+		for (std::size_t a = 0; a < static_cast<std::size_t>(n); ++a) {
+			const int ia = globalDof(nodes, dofPerNode,
+			                         a / static_cast<std::size_t>(dofPerNode),
+			                         static_cast<int>(a) % dofPerNode);
+			for (std::size_t b = 0; b < static_cast<std::size_t>(n); ++b) {
+				const int ib = globalDof(nodes, dofPerNode,
+				                         b / static_cast<std::size_t>(dofPerNode),
+				                         static_cast<int>(b) % dofPerNode);
+				K(ia, ib) += Ke(static_cast<Eigen::Index>(a),
+				                static_cast<Eigen::Index>(b));
 			}
 		}
 	}
@@ -153,9 +159,9 @@ Eigen::VectorXd assembleLoadVector(const Mesh& mesh,
 
 	Eigen::VectorXd F = Eigen::VectorXd::Zero(total);
 
-	for (int e = 0; e < mesh.elementCount(); ++e) {
-		const std::string& type = mesh.element_type[static_cast<std::size_t>(e)];
-		const std::vector<NodeId>& nodes = mesh.element_nodes[static_cast<std::size_t>(e)];
+	for (std::size_t e = 0; e < mesh.element_type.size(); ++e) {
+		const std::string& type = mesh.element_type[e];
+		const std::vector<NodeId>& nodes = mesh.element_nodes[e];
 
 		const std::unique_ptr<Element> element = ElementRegistry::create(type);
 
@@ -166,7 +172,8 @@ Eigen::VectorXd assembleLoadVector(const Mesh& mesh,
 		}
 
 		ElementContext ctx;
-		ctx.node_coords     = gatherNodeCoords(mesh, nodes, mesh.spatialDim(), e);
+		ctx.node_coords     = gatherNodeCoords(mesh, nodes, mesh.spatialDim(),
+		                                       static_cast<int>(e));
 		ctx.material        = &material;
 		ctx.section         = &section;
 		ctx.scheme          = scheme;
@@ -183,9 +190,11 @@ Eigen::VectorXd assembleLoadVector(const Mesh& mesh,
 		}
 
 		// 散列进全局载荷向量
-		for (int a = 0; a < n; ++a) {
-			const int ia = globalDof(nodes, dofPerNode, a / dofPerNode, a % dofPerNode);
-			F(ia) += Fe(a);
+		for (std::size_t a = 0; a < static_cast<std::size_t>(n); ++a) {
+			const int ia = globalDof(nodes, dofPerNode,
+			                         a / static_cast<std::size_t>(dofPerNode),
+			                         static_cast<int>(a) % dofPerNode);
+			F(ia) += Fe(static_cast<Eigen::Index>(a));
 		}
 	}
 

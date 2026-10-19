@@ -89,9 +89,9 @@ feml::Mesh makeBeamMesh(const std::string& type, int elementCount) {
 
 	// 节点坐标
 	mesh.node_coords.resize(nodeCount, 1);
-	for (int i = 0; i < nodeCount; ++i) {
-		mesh.node_coords(i, 0) = kL * static_cast<double>(i)
-		                       / static_cast<double>(intervals);
+	for (std::size_t i = 0; i < static_cast<std::size_t>(nodeCount); ++i) {
+		mesh.node_coords(static_cast<Eigen::Index>(i), 0)
+			= kL * static_cast<double>(i) / static_cast<double>(intervals);
 	}
 
 	// 单元类型：所有单元相同
@@ -100,15 +100,15 @@ feml::Mesh makeBeamMesh(const std::string& type, int elementCount) {
 	// 单元连接：BEAM2 取 (e, e+1)，BEAM3 取 (2e, 2e+1, 2e+2)
 	mesh.element_nodes.resize(static_cast<std::size_t>(elementCount));
 
-	for (int e = 0; e < elementCount; ++e) {
-		const int first = quadratic ? 2 * e : e;
+	for (std::size_t e = 0; e < static_cast<std::size_t>(elementCount); ++e) {
+		const int first = quadratic ? 2 * static_cast<int>(e) : static_cast<int>(e);
 
 		std::vector<feml::NodeId> conn;
 		conn.reserve(static_cast<std::size_t>(nodesPerElement));
-		for (int k = 0; k < nodesPerElement; ++k) {
-			conn.push_back(static_cast<feml::NodeId>(first + k));
+		for (std::size_t k = 0; k < static_cast<std::size_t>(nodesPerElement); ++k) {
+			conn.push_back(static_cast<feml::NodeId>(first + static_cast<int>(k)));
 		}
-		mesh.element_nodes[static_cast<std::size_t>(e)] = std::move(conn);
+		mesh.element_nodes[e] = std::move(conn);
 	}
 
 	return mesh;

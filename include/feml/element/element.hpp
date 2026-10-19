@@ -78,13 +78,11 @@ namespace feml {
 		virtual void stiffness(const ElementContext& ctx, Eigen::MatrixXd& Ke) const = 0;
 
 		/// 计算等效节点载荷向量 Fe（尺寸 totalDof）。
-		/// 没有分布载荷的单元不必重写（默认返回零向量）。
 		virtual void loadVector(const ElementContext& /*ctx*/, Eigen::VectorXd& Fe) const {
 			Fe = Eigen::VectorXd::Zero(totalDof());
 		}
 
 		/// 后处理：由单元位移求积分点上的应变与应力。
-		/// 暂时不做后处理的单元不必重写（默认返回空结果）。
 		virtual void recover(const ElementContext& /*ctx*/, ElementResult& out) const {
 			out = ElementResult{};
 		}

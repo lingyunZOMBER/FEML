@@ -3,11 +3,7 @@
 namespace feml {
 namespace {
 
-// ---------------------------------------------------------------------------
 //  一维二次 Lagrange 基函数及其导数
-//
-//      L₋₁(t) = t(t-1)/2    L₀(t) = 1-t²    L₊₁(t) = t(t+1)/2
-// ---------------------------------------------------------------------------
 
 Real lagrange1D(int index, Real t) {
 	switch (index) {
@@ -55,10 +51,6 @@ const std::array<Real, 8>& serendipity8Eta() {
 
 // ---------------------------------------------------------------------------
 //  9 节点 Lagrange
-//
-//  N_i = L_{a(i)}(ξ) · L_{b(i)}(η)，其中 a(i)、b(i) 取节点坐标对应的
-//  一维基函数编号（-1、0 或 +1）。
-//  节点的 a、b 编号由自然坐标表直接换算得到。
 // ---------------------------------------------------------------------------
 
 PlateShapeValues shape9Lagrange(Real xi, Real eta) {
@@ -68,19 +60,14 @@ PlateShapeValues shape9Lagrange(Real xi, Real eta) {
 	const std::array<Real, 9>& x = lagrange9Xi();
 	const std::array<Real, 9>& y = lagrange9Eta();
 
-	for (int i = 0; i < 9; ++i) {
-		const int a = static_cast<int>(x[static_cast<std::size_t>(i)]);
-		const int b = static_cast<int>(y[static_cast<std::size_t>(i)]);
+	for (std::size_t i = 0; i < x.size(); ++i) {
+		const int a = static_cast<int>(x[i]);
+		const int b = static_cast<int>(y[i]);
 
 		// 坐标为 -1 / 0 / +1，直接作为一维基函数的编号
-		s.N[static_cast<std::size_t>(i)] =
-			lagrange1D(a, xi) * lagrange1D(b, eta);
-
-		s.dNdXi[static_cast<std::size_t>(i)] =
-			lagrange1Dderiv(a, xi) * lagrange1D(b, eta);
-
-		s.dNdEta[static_cast<std::size_t>(i)] =
-			lagrange1D(a, xi) * lagrange1Dderiv(b, eta);
+		s.N[i]      = lagrange1D(a, xi) * lagrange1D(b, eta);
+		s.dNdXi[i]  = lagrange1Dderiv(a, xi) * lagrange1D(b, eta);
+		s.dNdEta[i] = lagrange1D(a, xi) * lagrange1Dderiv(b, eta);
 	}
 
 	return s;
@@ -88,10 +75,6 @@ PlateShapeValues shape9Lagrange(Real xi, Real eta) {
 
 // ---------------------------------------------------------------------------
 //  8 节点 Serendipity
-//
-//  角节点：N = (1+ξξᵢ)(1+ηηᵢ)(ξξᵢ + ηηᵢ − 1)/4
-//  边中点（ξᵢ=0）：N = (1−ξ²)(1+ηηᵢ)/2
-//  边中点（ηᵢ=0）：N = (1+ξξᵢ)(1−η²)/2
 // ---------------------------------------------------------------------------
 
 PlateShapeValues shape8Serendipity(Real xi, Real eta) {
@@ -101,8 +84,7 @@ PlateShapeValues shape8Serendipity(Real xi, Real eta) {
 	const std::array<Real, 8>& x = serendipity8Xi();
 	const std::array<Real, 8>& y = serendipity8Eta();
 
-	for (int i = 0; i < 8; ++i) {
-		const std::size_t k = static_cast<std::size_t>(i);
+	for (std::size_t k = 0; k < x.size(); ++k) {
 		const Real xi_i  = x[k];
 		const Real eta_i = y[k];
 

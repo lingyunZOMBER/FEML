@@ -89,8 +89,8 @@ Eigen::Matrix<double, 1, kDof> shearB(const ShapeAt& s) {
 void Beam3Timoshenko::stiffness(const ElementContext& ctx, Eigen::MatrixXd& Ke) const {
 	// ---- 1. 几何 ----
 	std::array<double, 3> x{};
-	for (int k = 0; k < 3; ++k) {
-		x[static_cast<std::size_t>(k)] = ctx.node_coords(k, 0);
+	for (std::size_t k = 0; k < x.size(); ++k) {
+		x[k] = ctx.node_coords(static_cast<Eigen::Index>(k), 0);
 	}
 
 	// ---- 2. 材料与截面 ----

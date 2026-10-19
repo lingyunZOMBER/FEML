@@ -1,31 +1,30 @@
 /// ===========================================================================
-///  plate_sweep —— Mindlin 板单元批量扫描驱动（作业 3）
+///  plate_sweep —— Mindlin 板单元锁死试验（作业 3，对应课本图 10.12）
 ///
 ///  【程序目标】
-///  对四边固支的方形板逐组参数求解，把板中心挠度与薄板理论解写入 CSV。
+///  用 8×8 网格离散四边固支方板，扫描长厚比，把中心挠度写入 CSV。
 ///
 ///  【用法】
 ///      plate_sweep [输出文件.csv]
 ///      省略参数时输出到 plate_sweep.csv
 ///
-///  【算例】四边固支方板，边长 a，厚 t，受均布横向载荷 q
-///      中心挠度的薄板理论值：w = 0.00126 · q a⁴ / D
-///      D = E t³ / (12(1−ν²))
+///  【算例】
+///  四边固支方板，边长 L，厚 t，受均布横向载荷 q。
+///  网格：每边 8 个单元。
+///  参考解：精确薄板解 w_c = 0.00126 · q L⁴ / D，D = E t³ / (12(1−ν²))
 ///
-///  【扫描范围】共 108 个算例
+///  【扫描范围】共 126 个算例
 ///      单元类型    PLATE9（9 节点 Lagrange）/ PLATE8（8 节点 Serendipity）
-///      每边单元数  2, 4, 8
 ///      积分方案    FULL / REDUCED / SELECTIVE
-///      厚跨比 t/a  0.1, 0.05, 0.02, 0.01, 0.005, 0.001
+///      长厚比 L/t  10, 12, 15, 20, 25, 30, 40, 50, 65, 80,
+///                  100, 130, 160, 200, 250, 320, 400, 500, 650, 800, 1000
 ///
 ///  【输出 CSV 列】
 ///      elementType            单元类型
-///      mesh                   每边单元数
 ///      scheme                 积分方案
-///      tOverA                 厚跨比
-///      wCenter                数值解：板中心挠度
-///      wThin                  薄板理论解
-///      ratio                  wCenter / wThin
+///      Lt                     长厚比 L/t
+///      wcD_qL4                数值解，无量纲中心挠度 w_c·D/(q·L⁴)
+///      wcD_qL4_thin           精确薄板解（常数 0.00126）
 ///
 ///  【单位制】SI：长度 m，力 N，弹性模量 Pa
 /// ===========================================================================
@@ -56,13 +55,15 @@ namespace {
 //  算例参数
 // ---------------------------------------------------------------------------
 
-constexpr double kE      = 200.0e9;   ///< 弹性模量 [Pa]
-constexpr double kNu     = 0.3;       ///< 泊松比
-constexpr double kA      = 1.0;       ///< 板边长 [m]
-constexpr double kQ      = 1000.0;    ///< 均布载荷 [N/m²]
-constexpr double kShear  = 5.0 / 6.0; ///< 剪切修正因子
+constexpr double kE     = 200.0e9;   ///< 弹性模量 [Pa]
+constexpr double kNu    = 0.3;       ///< 泊松比
+constexpr double kL     = 1.0;       ///< 方板边长 [m]
+constexpr double kQ     = 1000.0;    ///< 均布载荷 [N/m²]
+constexpr double kShear = 5.0 / 6.0; ///< 剪切修正因子
 
-/// 四边固支方板中心挠度的薄板理论系数：w = α·q·a⁴/D
+constexpr int kMeshPerSide = 8;      ///< 每边单元数
+
+/// 四边固支方板中心挠度的精确薄板解系数：w_c = α·q·L⁴/D
 constexpr double kThinPlateAlpha = 0.00126;
 
 // ---------------------------------------------------------------------------
@@ -72,21 +73,23 @@ constexpr double kThinPlateAlpha = 0.00126;
 /// 方形板网格及其辅助信息
 struct PlateMesh {
 	feml::Mesh mesh;
-	int nodesPerSide = 0;              ///< 每边节点数（2n+1）
-	std::vector<int> id;               ///< 网格位置 (i,j) → 节点号；-1 表示不存在
-	int centerNode = -1;               ///< 板中心节点号
+	int nodesPerSide = 0;   ///< 每边节点数
+	std::vector<int> id;    ///< 网格位置 (i,j) → 节点号；-1 表示不存在
+	int centerNode = -1;    ///< 板中心节点号
 };
 
 /// 生成 n×n 个板单元的方形网格
 ///
-/// 节点位置按 (2n+1)×(2n+1) 的规则网格排布。
+/// 节点按 (2n+1)×(2n+1) 的规则网格排布。
 /// PLATE8 不使用单元中心点，因此跳过 (奇数, 奇数) 位置的节点。
-PlateMesh buildSquarePlate(const std::string& type, int n, double a) {
+PlateMesh buildSquarePlate(const std::string& type, int n, double L) {
 	PlateMesh pm;
 
 	const int m = 2 * n + 1;
+	const std::size_t ms = static_cast<std::size_t>(m);
+
 	pm.nodesPerSide = m;
-	pm.id.assign(static_cast<std::size_t>(m) * static_cast<std::size_t>(m), -1);
+	pm.id.assign(ms * ms, -1);
 
 	const bool quadratic = (type == "PLATE9");
 
@@ -95,23 +98,22 @@ PlateMesh buildSquarePlate(const std::string& type, int n, double a) {
 	std::vector<double> ys;
 	int count = 0;
 
-	for (int j = 0; j < m; ++j) {
-		for (int i = 0; i < m; ++i) {
+	for (std::size_t j = 0; j < ms; ++j) {
+		for (std::size_t i = 0; i < ms; ++i) {
 			if (!quadratic && (i % 2 == 1) && (j % 2 == 1)) {
 				continue;   // PLATE8 无单元中心节点
 			}
-			pm.id[static_cast<std::size_t>(j) * static_cast<std::size_t>(m)
-			      + static_cast<std::size_t>(i)] = count++;
+			pm.id[j * ms + i] = count++;
 
-			xs.push_back(a * static_cast<double>(i) / static_cast<double>(m - 1));
-			ys.push_back(a * static_cast<double>(j) / static_cast<double>(m - 1));
+			xs.push_back(L * static_cast<double>(i) / static_cast<double>(m - 1));
+			ys.push_back(L * static_cast<double>(j) / static_cast<double>(m - 1));
 		}
 	}
 
 	pm.mesh.node_coords.resize(count, 2);
-	for (int k = 0; k < count; ++k) {
-		pm.mesh.node_coords(k, 0) = xs[static_cast<std::size_t>(k)];
-		pm.mesh.node_coords(k, 1) = ys[static_cast<std::size_t>(k)];
+	for (std::size_t k = 0; k < xs.size(); ++k) {
+		pm.mesh.node_coords(static_cast<Eigen::Index>(k), 0) = xs[k];
+		pm.mesh.node_coords(static_cast<Eigen::Index>(k), 1) = ys[k];
 	}
 
 	// ---- 单元 ----
@@ -122,7 +124,7 @@ PlateMesh buildSquarePlate(const std::string& type, int n, double a) {
 		{1, 1}                            // 中心（仅 PLATE9）
 	};
 
-	const int nNode = quadratic ? 9 : 8;
+	const std::size_t nNode = quadratic ? 9 : 8;
 
 	for (int ey = 0; ey < n; ++ey) {
 		for (int ex = 0; ex < n; ++ex) {
@@ -130,15 +132,14 @@ PlateMesh buildSquarePlate(const std::string& type, int n, double a) {
 			const int j0 = 2 * ey;
 
 			std::vector<feml::NodeId> conn;
-			conn.reserve(static_cast<std::size_t>(nNode));
+			conn.reserve(nNode);
 
-			for (int k = 0; k < nNode; ++k) {
+			for (std::size_t k = 0; k < nNode; ++k) {
 				const int gi = i0 + offset[k][0];
 				const int gj = j0 + offset[k][1];
 
-				const int node =
-					pm.id[static_cast<std::size_t>(gj) * static_cast<std::size_t>(m)
-					      + static_cast<std::size_t>(gi)];
+				const int node = pm.id[static_cast<std::size_t>(gj) * ms
+				                       + static_cast<std::size_t>(gi)];
 
 				conn.push_back(static_cast<feml::NodeId>(node));
 			}
@@ -148,9 +149,7 @@ PlateMesh buildSquarePlate(const std::string& type, int n, double a) {
 		}
 	}
 
-	pm.centerNode =
-		pm.id[static_cast<std::size_t>(n) * static_cast<std::size_t>(m)
-		      + static_cast<std::size_t>(n)];
+	pm.centerNode = pm.id[static_cast<std::size_t>(n) * ms + static_cast<std::size_t>(n)];
 
 	return pm;
 }
@@ -176,21 +175,21 @@ double solveClampedPlate(const PlateMesh& pm, double thickness,
 	feml::DofManager dofs(pm.mesh.nodeCount(), 3);
 
 	const int m = pm.nodesPerSide;
-	for (int j = 0; j < m; ++j) {
-		for (int i = 0; i < m; ++i) {
-			const int node =
-				pm.id[static_cast<std::size_t>(j) * static_cast<std::size_t>(m)
-				      + static_cast<std::size_t>(i)];
+	const std::size_t ms = static_cast<std::size_t>(m);
+
+	for (std::size_t j = 0; j < ms; ++j) {
+		for (std::size_t i = 0; i < ms; ++i) {
+			const int node = pm.id[j * ms + i];
 			if (node < 0) {
 				continue;
 			}
 
-			const bool boundary = (i == 0 || i == m - 1 || j == 0 || j == m - 1);
+			const bool boundary = (i == 0 || i == ms - 1 || j == 0 || j == ms - 1);
 			if (!boundary) {
 				continue;
 			}
 
-			for (int c = 0; c < 3; ++c) {
+			for (std::size_t c = 0; c < 3; ++c) {
 				dofs.constrain(static_cast<feml::NodeId>(node),
 				               static_cast<feml::DofComponent>(c));
 			}
@@ -219,11 +218,11 @@ double solveClampedPlate(const PlateMesh& pm, double thickness,
 //  参考解与名字
 // ---------------------------------------------------------------------------
 
-/// 薄板理论中心挠度：w = α·q·a⁴/D，D = E t³/(12(1−ν²))
-double thinPlateCenter(double thickness) {
+/// 无量纲化：w·D/(q·L⁴)，D = E t³/(12(1−ν²))
+double dimensionless(double w, double thickness) {
 	const double D = kE * thickness * thickness * thickness
 	               / (12.0 * (1.0 - kNu * kNu));
-	return kThinPlateAlpha * kQ * kA * kA * kA * kA / D;
+	return w * D / (kQ * kL * kL * kL * kL);
 }
 
 const char* schemeName(feml::IntegrationScheme scheme) {
@@ -254,59 +253,57 @@ int main(int argc, char** argv) {
 		}
 
 		out << std::scientific << std::setprecision(15);
-
-		out << "elementType,mesh,scheme,tOverA,wCenter,wThin,ratio\n";
+		out << "elementType,scheme,Lt,wcD_qL4,wcD_qL4_thin\n";
 
 		// 扫描参数
-		const char* const elementTypes[] = { "PLATE9", "PLATE8" };
-		const int meshes[]               = { 2, 4, 8 };
 		const feml::IntegrationScheme schemes[] = {
 			feml::IntegrationScheme::Full,
 			feml::IntegrationScheme::Reduced,
 			feml::IntegrationScheme::SelectiveReduced
 		};
-		const double thicknessRatios[] = { 0.1, 0.05, 0.02, 0.01, 0.005, 0.001 };
+		const double lengthRatios[] = {
+			10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 65.0, 80.0,
+			100.0, 130.0, 160.0, 200.0, 250.0, 320.0, 400.0, 500.0, 650.0, 800.0, 1000.0
+		};
+
+		// 两种单元的 8×8 网格，各建一次
+		const PlateMesh pm9 = buildSquarePlate("PLATE9", kMeshPerSide, kL);
+		const PlateMesh pm8 = buildSquarePlate("PLATE8", kMeshPerSide, kL);
+
+		const PlateMesh* meshes[] = { &pm9, &pm8 };
+		const char* const types[] = { "PLATE9", "PLATE8" };
 
 		int written = 0;
 		int failed  = 0;
 
-		for (const char* type : elementTypes) {
-			for (const int n : meshes) {
-				// 网格只与单元类型和划分有关，循环外建一次
-				const PlateMesh pm = buildSquarePlate(type, n, kA);
+		for (std::size_t t = 0; t < 2; ++t) {
+			for (const feml::IntegrationScheme scheme : schemes) {
+				for (const double Lt : lengthRatios) {
 
-				for (const feml::IntegrationScheme scheme : schemes) {
-					for (const double tOverA : thicknessRatios) {
+					const double thickness = kL / Lt;
 
-						const double t = tOverA * kA;
-						const double wThin = thinPlateCenter(t);
+					try {
+						const double wc = solveClampedPlate(*meshes[t], thickness, scheme);
+						const double wcDim = dimensionless(wc, thickness);
 
-						try {
-							const double wCenter = solveClampedPlate(pm, t, scheme);
+						out << types[t] << ','
+						    << schemeName(scheme) << ','
+						    << Lt << ','
+						    << wcDim << ','
+						    << kThinPlateAlpha << '\n';
 
-							out << type << ','
-							    << n << ','
-							    << schemeName(scheme) << ','
-							    << tOverA << ','
-							    << wCenter << ','
-							    << wThin << ','
-							    << wCenter / wThin << '\n';
+						++written;
+					}
+					catch (const std::exception& e) {
+						std::cerr << "算例失败: " << types[t] << " " << schemeName(scheme)
+						          << " L/t=" << Lt << " — " << e.what() << "\n";
 
-							++written;
-						}
-						catch (const std::exception& e) {
-							std::cerr << "算例失败: " << type << " mesh=" << n
-							          << " " << schemeName(scheme)
-							          << " t/a=" << tOverA << " — " << e.what() << "\n";
+						out << types[t] << ','
+						    << schemeName(scheme) << ','
+						    << Lt << ','
+						    << "nan,nan\n";
 
-							out << type << ','
-							    << n << ','
-							    << schemeName(scheme) << ','
-							    << tOverA << ','
-							    << "nan,nan,nan\n";
-
-							++failed;
-						}
+						++failed;
 					}
 				}
 			}

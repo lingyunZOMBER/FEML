@@ -66,7 +66,7 @@ namespace feml {
 		const GaussRule1D ry = GaussRule1D::make(ny);
 
 		GaussRule2D rule;
-		rule.points_.reserve(static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny));
+		rule.points_.reserve(static_cast<std::size_t>(nx * ny));
 
 		for (const GaussPoint1D& px : rx.points()) {
 			for (const GaussPoint1D& py : ry.points()) {
